@@ -35,12 +35,12 @@ export default function VolunteerScreen() {
   const [step, setStep] = useState<number>(1); 
 
   // --- FORM STATES (Step 2) ---
+  const [centers, setCenters] = useState<any[]>([]);
+  const [selectedCenterId, setSelectedCenterId] = useState<string>('');
   const [isSiteDropdownOpen, setIsSiteDropdownOpen] = useState<boolean>(false);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState<boolean>(false);
   const [selectedTime, setSelectedTime] = useState<string>('Select Time Slot');
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
-  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
 
   const handleFileUpload = async () => {
@@ -69,13 +69,13 @@ export default function VolunteerScreen() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          setCampaigns(data.data);
+          setCenters(data.data);
         }
       })
       .catch(console.error);
   }, []);
 
-  const selectedCampaignTitle = campaigns.find(c => c.id === selectedCampaignId)?.title || 'Select Site Location';
+  const selectedCenterName = centers.find(c => c.id === selectedCenterId)?.name || 'Select Site Location';
 
   const [checkboxes, setCheckboxes] = useState<Checkboxes>({
     background: false,
@@ -122,7 +122,7 @@ export default function VolunteerScreen() {
   };
 
   // --- VALIDATION LOGIC ---
-  const isSiteValid = selectedCampaignId !== '';
+  const isSiteValid = selectedCenterId !== '';
   const isTimeValid = selectedTime !== 'Select Time Slot';
   const isRoleValid = selectedRole !== null;
   const isCheckboxesValid = checkboxes.background && checkboxes.documents && checkboxes.age;
@@ -147,7 +147,8 @@ export default function VolunteerScreen() {
       setShowErrors(false);
       try {
         const formData = new FormData();
-        formData.append("campaign_id", selectedCampaignId);
+        formData.append("center_id", selectedCenterId);
+        formData.append("center_name", selectedCenterName);
         formData.append("time_slot", selectedTime);
         formData.append("role", selectedRole!);
         formData.append("background_check_agreed", String(checkboxes.background));
@@ -300,18 +301,18 @@ export default function VolunteerScreen() {
                 <View style={styles.cardOutline}>
                   <Text style={styles.fieldLabel}>Select Site Location</Text>
                   <Pressable style={[styles.pickerBox, showErrors && !isSiteValid && styles.errorBorder]} onPress={() => { setIsSiteDropdownOpen(!isSiteDropdownOpen); setIsTimeDropdownOpen(false); }}>
-                    <Text style={[styles.pickerText, !isSiteValid && {color: '#888'}]}>"{selectedCampaignTitle}"</Text>
+                    <Text style={[styles.pickerText, !isSiteValid && {color: '#888'}]}>"{selectedCenterName}"</Text>
                     <Text style={styles.pickerArrow}>∨</Text>
                   </Pressable>
                   
                   {isSiteDropdownOpen && (
                     <View style={styles.dropdownMenu}>
-                      {campaigns.length === 0 ? (
-                        <Text style={[styles.dropdownItemText, { padding: 12, color: '#888', fontStyle: 'italic' }]}>No active volunteer campaigns.</Text>
+                      {centers.length === 0 ? (
+                        <Text style={[styles.dropdownItemText, { padding: 12, color: '#888', fontStyle: 'italic' }]}>No active volunteer sites.</Text>
                       ) : (
-                        campaigns.map((camp) => (
-                          <Pressable key={camp.id} style={styles.dropdownItem} onPress={() => { setSelectedCampaignId(camp.id); setIsSiteDropdownOpen(false); }}>
-                            <Text style={styles.dropdownItemText}>{camp.title}</Text>
+                        centers.map((center) => (
+                          <Pressable key={center.id} style={styles.dropdownItem} onPress={() => { setSelectedCenterId(center.id); setIsSiteDropdownOpen(false); }}>
+                            <Text style={styles.dropdownItemText}>{center.name}</Text>
                           </Pressable>
                         ))
                       )}
@@ -374,7 +375,7 @@ export default function VolunteerScreen() {
 
                   <View style={styles.capacityRow}>
                     <Text style={styles.capacityLabel}>Real-Time Capacity:</Text>
-                    <View style={styles.siteBadge}><Text style={styles.siteBadgeText}>{selectedCampaignId !== '' ? selectedCampaignTitle : ''}</Text></View>
+                    <View style={styles.siteBadge}><Text style={styles.siteBadgeText}>{selectedCenterId !== '' ? selectedCenterName : ''}</Text></View>
                     <View style={[styles.badge, styles.badgeModerate, {marginLeft: 10}]}><Text style={styles.badgeText}>Moderate</Text></View>
                   </View>
 

@@ -14,8 +14,9 @@ interface PledgeItem {
 
 interface Campaign {
   id: string;
-  title: string;
-  type: string;
+  name: string;
+  description: string;
+  status: string;
 }
 
 export default function PledgeScreen() {
@@ -64,7 +65,7 @@ export default function PledgeScreen() {
   const [isConfirmed, setIsConfirmed] = useState<boolean>(false);
 
   // --- DATA ARRAYS ---
-  const selectedCampaignTitle = campaigns.find(c => c.id === selectedSite)?.title || "Select Site Location";
+  const selectedCampaignTitle = campaigns.find(c => c.id === selectedSite)?.name || "Select Site Location";
 
   const timeSlots: string[] = [
     "Morning (8:00 AM - 12:00 PM)", "Afternoon (1:00 PM - 5:00 PM)", "Evening (5:00 PM - 8:00 PM)"
@@ -298,7 +299,7 @@ export default function PledgeScreen() {
                 <View style={styles.dropdownMenu}>
                   {campaigns.map((campaign, index) => (
                     <Pressable key={index} style={styles.dropdownItem} onPress={() => { setSelectedSite(campaign.id); setIsSiteDropdownOpen(false); }}>
-                      <Text style={styles.dropdownItemText}>{campaign.title}</Text>
+                      <Text style={styles.dropdownItemText}>{campaign.name}</Text>
                     </Pressable>
                   ))}
                   {campaigns.length === 0 && (

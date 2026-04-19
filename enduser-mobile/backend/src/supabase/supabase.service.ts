@@ -1,14 +1,17 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class SupabaseService implements OnModuleInit {
   private client!: SupabaseClient;
+  private damayanClient!: SupabaseClient;
+  private readonly logger = new Logger(SupabaseService.name);
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
+    // BayaniHub DB (primary)
     const url = this.config.getOrThrow<string>('SUPABASE_URL');
     const serviceRoleKey = this.config.getOrThrow<string>('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -18,10 +21,27 @@ export class SupabaseService implements OnModuleInit {
         persistSession: false,
       },
     });
+
+    // Damayan DB (external disaster management)
+    const damayanUrl = this.config.getOrThrow<string>('DAMAYAN_SUPABASE_URL');
+    const damayanKey = this.config.getOrThrow<string>('DAMAYAN_SERVICE_ROLE_KEY');
+
+    this.damayanClient = createClient(damayanUrl, damayanKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    this.logger.log('Connected to BayaniHub DB and Damayan DB');
   }
 
   getClient(): SupabaseClient {
     return this.client;
+  }
+
+  getDamayanClient(): SupabaseClient {
+    return this.damayanClient;
   }
 
   getAnonKey(): string {
@@ -35,25 +55,23 @@ export class SupabaseService implements OnModuleInit {
   // --- BAYANIHUB WORKFLOW INSERTS ---
 
   async insertVolunteerApplication(data: any, volunteerAuthId: string, file?: Express.Multer.File) {
-    if (!data.campaign_id || !data.role) {
-      throw new Error("Missing campaign_id or role in application payload.");
+    if (!data.center_id || !data.role) {
+      throw new Error("Missing center_id or role in application payload.");
     }
 
-    // 1. Resolve role_id safely
+    // 1. Resolve role_id — find or create a role for this evacuation center
     let { data: roles } = await this.client
       .from('volunteer_roles')
       .select('id')
-      .eq('campaign_id', data.campaign_id)
       .ilike('title', data.role)
       .limit(1);
 
     let roleId;
     if (!roles || roles.length === 0) {
-      // Auto-provision an 'open' role if it doesn't already exist for this campaign
+      // Auto-provision a role (not campaign-bound since we now use evacuation centers)
       const { data: newRole, error: roleErr } = await this.client
         .from('volunteer_roles')
         .insert([{
-          campaign_id: data.campaign_id,
           title: data.role,
           status: 'open',
           slots_total: 10
@@ -82,6 +100,7 @@ export class SupabaseService implements OnModuleInit {
 
     // 3. Condense Questionnaire Data into Motivation field
     const motivationStr = `Questionnaire Assessment:
+- Evacuation Center: ${data.center_name || 'N/A'}
 - Disaster Experience: ${data.disaster_experience === 'true' ? 'Yes' : 'No'}
 - Rugged Environment Comfort: ${data.rugged_environment === 'true' ? 'Yes' : 'No'}
 - Medical Conditions/Restrictions: ${data.medical_conditions === 'true' ? 'Yes' : 'No'}
@@ -110,26 +129,25 @@ export class SupabaseService implements OnModuleInit {
     if (error) throw new Error(`Supabase Error: ${error.message}`);
     return result;
   }
-
   async getVolunteerCampaigns() {
-    const { data: result, error } = await this.client
-      .from('bh_campaigns')
-      .select('id, title, type')
-      .in('type', ['volunteer', 'combined'])
-      .eq('status', 'active');
+    // Fetch open evacuation centers from Damayan DB
+    const { data: result, error } = await this.damayanClient
+      .from('evacuation_centers')
+      .select('id, name, municipality, barangay, status, capacity, current_occupancy')
+      .eq('status', 'open');
       
-    if (error) throw new Error(`Supabase Error: ${error.message}`);
+    if (error) throw new Error(`Damayan DB Error: ${error.message}`);
     return result;
   }
 
   async getActiveCampaigns() {
-    const { data: result, error } = await this.client
-      .from('bh_campaigns')
-      .select('id, title, type')
-      .in('type', ['donation', 'combined'])
-      .eq('status', 'active');
+    // Fetch ongoing relief operations from Damayan DB
+    const { data: result, error } = await this.damayanClient
+      .from('relief_operations')
+      .select('id, name, description, status')
+      .eq('status', 'ongoing');
       
-    if (error) throw new Error(`Supabase Error: ${error.message}`);
+    if (error) throw new Error(`Damayan DB Error: ${error.message}`);
     return result;
   }
 
